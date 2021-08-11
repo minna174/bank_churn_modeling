@@ -1,0 +1,457 @@
+---
+title: "Final Project"
+author: "Minna George-3008351"
+date: "15/07/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+
+
+#install.packages("shiny")
+library(MASS)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+dataset<- read.csv("C:/Users/minna/Desktop/attrition.csv");
+View(dataset)
+dataset[is.na(dataset)]=0
+View(dataset)
+
+summary(dataset)
+head(dataset)
+#dataset <- sample(nrow(dataset), size=10000, replace = FALSE, prob = NULL)
+#dataset.subset <- dataset[s, ]
+#dataset.subset
+
+#feature selection
+dataset = dataset[4:14]
+head(dataset)
+```
+
+
+
+
+```{r pressure, echo=FALSE}
+
+#  factors
+dataset$Geography = as.numeric(factor(dataset$Geography,
+                                      levels = c('France', 'Spain', 'Germany'),
+                                      labels = c(1, 2, 3)))
+dataset$Gender = as.numeric(factor(dataset$Gender,
+                                   levels = c('Female', 'Male'),
+                                   labels = c(1, 2)))
+
+head(dataset)
+
+
+```
+
+
+
+```{r pressure, echo=FALSE}
+
+#classification model packages
+#install.packages("randomForest")
+#install.packages("data.table")
+#install.packages("lattice")
+#install.packages("Rcpp")
+#install.packages("confusionMatrix")
+#install.packages("mlbench")
+#install.packages("caret")
+#install.packages("e1071")
+
+
+library(randomForest)
+library(data.table)
+library(dplyr)
+library(lattice)
+library(ggplot2)
+library(caret)
+library(caTools)
+library(rlang)
+library(visNetwork)
+library(mlbench)
+library(data.table)
+library(Rcpp)
+library(NeuralNetTools)
+library(pROC)
+require(pROC)
+library(ROCR)
+library(RColorBrewer)
+library(h2o)
+
+
+
+corr<- dataset %>%
+sapply(., as.numeric) %>%
+as.data.table()
+corr<- cor(corr, use = 'pairwise.complete.obs')
+corr[upper.tri(corr)] <- NA
+corr<- melt(corr, na.rm = T) %>% as.data.table() %>% setorder(-value)
+
+corr$text<- ifelse(abs(corr$value) >= .8 &corr$value != 1, round(corr$value, 2), '')
+forcorrplot<-data
+
+ggplot(data = corr, aes(x = Var1, y = Var2, fill = value)) +
+geom_tile(color = 'white') +
+geom_text(aes(label = text)) +
+  scale_fill_gradient2(low = 'blue', high = 'red', mid = 'white',
+                       midpoint = 0, limit = c(-1, 1),
+                       name = 'Pearson Correlation') +
+theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+labs(title = 'Correlation Matrix')
+
+
+```
+
+
+
+
+
+
+
+
+```{r pressure, echo=FALSE}
+
+# Create Test Data
+
+test_ones <- attrition_ones[-attrition_ones_training_rows, ]
+test_zeros <- attrition_zeros[-attrition_zeros_training_rows, ]
+testData <- rbind(test_ones, test_zeros)  # row bind the 1's and 0's 
+
+
+```
+
+
+
+```{r pressure, echo=FALSE}
+#Training and Test data
+
+library("caret")
+set.seed(101)
+trainingInd <- createDataPartition(dataset$Exited, p= 0.80, list = F)
+training_data <- dataset[trainingInd,]
+test_data <- dataset[-trainingInd,]
+summary(dataset)
+```
+
+
+
+
+```{r pressure, echo=FALSE}
+
+## Removing hascrcard and Estimated Salary ##
+
+dataset=dataset[-8]
+dataset=dataset[-9]
+summary(dataset)
+```
+
+
+
+
+
+```{r pressure, echo=FALSE}
+
+# install.packages('caTools')
+
+library(caTools)
+set.seed(123)
+split = sample.split(dataset$Exited, SplitRatio = 0.8)
+training_set = subset(dataset, split == TRUE)
+test_set = subset(dataset, split == FALSE)
+
+
+```
+
+
+
+
+```{r pressure, echo=FALSE}
+
+
+######################################################################################################
+#install.packages("randomForest")
+
+library(ROCR)
+library(e1071)
+library(randomForest)
+classifier_rf_new= randomForest(x = training_set[-9],
+                                y = training_set$Exited,
+ntree = 500)
+
+y_pred_rf_new = predict(classifier_rf_new, newdata = test_set[-9])
+
+
+y_pred_rf_new = ifelse(y_pred_rf_new> 0.5, 1, 0)
+
+# Making the Confusion Matrix
+cm_rf_new = table(test_set[,9], y_pred_rf_new)
+
+#accuracy
+n_rf_new = sum(cm_rf_new)
+diag_rf_new = diag(cm_rf_new)
+accuracy_rf_new = sum(diag_rf_new) / n_rf_new
+accuracy_rf_new
+
+
+
+pred_rf<- prediction(test_set$Exited, y_pred_rf_new)
+perf_rf<- performance(pred_rf,"tpr","fpr")
+plot(perf_rf,colorize=TRUE, main="AUC RF")
+
+cm_rf=confusionMatrix(table(test_set$Exited,y_pred_rf_new))
+cm_rf
+
+
+```
+
+
+
+```{r pressure, echo=FALSE}
+
+#################################################################################################
+
+classifier_glm = glm(formula = Exited ~ .,
+                     family = binomial,
+                     data = training_set)
+summary(classifier_glm)
+prob_pred = predict(classifier_glm, type = 'response', newdata = test_set[-9])
+y_pred = ifelse(prob_pred> 0.5, 1, 0)
+
+summary(classifier_glm)
+
+
+```
+
+
+
+
+
+
+```{r pressure, echo=FALSE}
+
+# Generalized Linear Model Interpretation
+
+library(caret)
+#library(confusionMatrix)
+#Creating confusion matrix
+cm_glm = table(test_set[, 9], y_pred> 0.5)
+cmglm=confusionMatrix(table(test_set$Exited,y_pred))
+cmglm
+
+#Calculating accuracy
+n_glm_new = sum(cm_glm)
+diag_glm = diag(cm_glm)
+accuracy_glm_new = sum(diag_glm) / n_glm_new
+accuracy_glm_new
+
+pred_glm<- prediction(test_set$Exited, y_pred)
+perf_glm<- performance(pred_glm,"tpr","fpr")
+plot(perf_glm,colorize=TRUE, main="AUC GLM")
+
+
+```
+
+
+
+
+
+```{r pressure, echo=FALSE}
+
+###################################################################################################
+library(rpart)
+training_set$Exited<- factor(training_set$Exited)
+classifier_new = rpart(formula =Exited ~ .,
+                       data = training_set, method='class')
+plot(classifier_new)
+text(classifier_new, pretty = 0)
+summary(classifier_new)
+
+
+```
+
+
+
+
+```{r pressure, echo=FALSE}
+library(e1071)
+# Predicting the Test set results
+y_pred_dt_new= predict(classifier_new, newdata = test_set[-9], type = 'class')
+
+y<-t(test_set[9])
+length(y)
+# Making the Confusion Matrix
+cm_dt_new = table(y, y_pred_dt_new)
+
+cmdt=confusionMatrix(table(test_set$Exited,y_pred_dt_new))
+cmdt
+
+
+#accuracy
+n_dt_new = sum(cm_dt_new)
+diag_dt_new = diag(cm_dt_new)
+accuracy_dt_new = sum(diag_dt_new) / n_dt_new
+accuracy_dt_new
+library(pROC)
+
+pred_dt<- prediction(test_set$Exited, y_pred_dt_new)
+perf_dt<- performance(pred_glm,"tpr","fpr")
+plot(perf_dt,colorize=TRUE, main="AUC DT")
+
+
+```
+```{r pressure, echo=FALSE}
+
+####################################################################################################
+#install.packages("e1071")
+library(e1071)
+
+
+classifier_nb = naiveBayes(x = training_set[-9],
+                           y = training_set$Exited)
+
+# Predicting the Test set results
+y_pred_nb = predict(classifier_nb, newdata = test_set[-9])
+
+# Making the Confusion Matrix
+cm_nb= table(test_set[, 9], y_pred_nb)
+cm_nb_new=cm_nb
+
+n_nb_new = sum(cm_nb_new)
+diag_nb_new = diag(cm_nb_new)
+accuracy_nb_new = sum(diag_nb_new) / n_nb_new
+accuracy_nb_new
+
+cmnb=confusionMatrix(table(test_set$Exited,y_pred_nb))
+cmnb
+
+library(ROCR)
+pred<- prediction(test_set$Exited, y_pred_nb)
+perf <- performance(pred,"tpr","fpr")
+plot(perf,colorize=TRUE,main='AUC NB')
+
+```
+
+
+```{r pressure, echo=FALSE}
+
+##############################################################################################
+
+#SupportVectorMachine
+# install.packages('e1071')
+library(e1071)
+classifier_svm = svm(formula = Exited ~ .,
+                     data = training_set,
+                     type = 'C-classification',
+                     kernel = 'radial')
+
+# Predicting the Test set results
+y_pred_svm = predict(classifier_svm, newdata = test_set[-9])
+
+# Making the Confusion Matrix
+cm_svm_new = table(test_set[, 9], y_pred_svm)
+
+cmsvm=confusionMatrix(table(test_set$Exited,y_pred_svm))
+cmsvm
+
+n_svm_new = sum(cm_svm_new)
+diag_svm_new = diag(cm_svm_new)
+accuracy_svm_new = sum(diag_svm_new) / n_svm_new
+accuracy_svm_new
+
+
+pred_svm<- prediction(test_set$Exited, y_pred_svm)
+perf_svm<- performance(pred_svm,"tpr","fpr")
+plot(perf_svm,colorize=TRUE, main="AUC SVM")
+
+
+
+```
+
+
+```{r pressure, echo=FALSE}
+
+
+###########################
+
+library(caret)
+library(randomForest)
+library(lattice)
+library(ggplot2)
+#library(confusionMatrix)
+
+#K- Fold Cross validation to improve the accuracy . we take 10 folds and use it on random forest model
+
+nrFolds<- 12
+
+# generate array containing fold-number for each sample (row)
+folds <- rep_len(1:nrFolds, nrow(dataset))
+
+# actual cross validation
+for(k in 1:nrFolds) {
+  # actual split of the data
+  fold <- which(folds == k)
+data.train<- dataset[-fold,]
+data.test<- dataset[fold,]
+
+  # train and test your model with data.train and data.test
+}
+
+classifier_rf_new_k= randomForest(x = data.train[-9],
+                                  y = data.train$Exited,
+ntree = 500)
+
+y_pred_rf_new_k= predict(classifier_rf_new_k, newdata = data.test[-9])
+
+
+y_pred_rf_new_k = ifelse(y_pred_rf_new_k> 0.5, 1, 0)
+a<-t(data.test[9])
+length(a)
+# Making the Confusion Matrix
+cm_rf_new_k = table(a, y_pred_rf_new_k)
+#accuracy
+n_rf_new_k = sum(cm_rf_new_k)
+diag_rf_new_k = diag(cm_rf_new_k)
+accuracy_rf_new_k = sum(diag_rf_new_k) / n_rf_new_k
+accuracy_rf_new_k
+
+cmrfk=confusionMatrix(table(a,y_pred_rf_new_k))
+cmrfk
+
+
+
+```
+```{r pressure, echo=FALSE}
+
+par(mfrow=c(2,3))
+plot(perf_rf,colorize=TRUE, main="AUC RF")
+plot(perf_glm,colorize=TRUE, main="AUC GLM")
+plot(perf_dt,colorize=TRUE, main="AUC DT")
+plot(perf,colorize=TRUE,main='AUC NB')
+plot(perf_svm,colorize=TRUE, main="AUC SVM")
+par(mfrow=c(1,1))
+
+
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
